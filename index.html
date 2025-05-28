@@ -51,6 +51,36 @@
   <h4>Inventory List</h4>
   <ul id="inventoryList" class="list-group mb-5"></ul>
 
+<div class="row mb-3">
+  <div class="col-md-4">
+    <input class="form-control" id="searchBox" placeholder="Search Item...">
+  </div>
+  <div class="col-md-3">
+    <select id="filterStatus" class="form-select">
+      <option value="">Filter by Status</option>
+      <option>Active</option>
+      <option>In Repair</option>
+      <option>Disposed</option>
+    </select>
+  </div>
+  <div class="col-md-3">
+    <select id="filterDepartment" class="form-select">
+      <option value="">Filter by Department</option>
+      <option>IT</option>
+      <option>Admin</option>
+      <option>HR</option>
+      <option>Finance</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-secondary w-100" onclick="exportCSV()">Export CSV</button>
+  </div>
+</div>
+
+
+
+
+  
   <script>
     const apiUrl = 'https://script.google.com/macros/s/AKfycbyKCDw7VM8scwKAoc9nD8v_bv-I3cQuRqnVaVJgfbpZg1fH6s3T1CEC1WZsUBza/exec'; // Replace with your Apps Script Web App URL
 
@@ -84,28 +114,58 @@
         loadInventory();
       });
     });
+let inventoryData = [];
 
-    function loadInventory() {
-      fetch(apiUrl)
-        .then(res => res.json())
-        .then(data => {
-          let html = "";
-          data.forEach(item => {
-            html += `
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div>
-                  <strong>${item["Asset ID"]}</strong> - ${item["Item Description"]}
-                  <br><small class="text-muted">${item["Status"]}</small>
-                </div>
-                <div>
-                  <button class="btn btn-sm btn-outline-primary me-2" onclick='editItem(${JSON.stringify(item)})'>Edit</button>
-                  <button class="btn btn-sm btn-outline-danger" onclick='deleteItem("${item["Asset ID"]}")'>Delete</button>
-                </div>
-              </li>`;
-          });
-          document.getElementById("inventoryList").innerHTML = html;
-        });
-    }
+function loadInventory() {
+  fetch(apiUrl)
+    .then(res => res.json())
+    .then(data => {
+      inventoryData = data;
+      displayInventory(data);
+    });
+}
+
+function displayInventory(data) {
+  const list = document.getElementById("inventoryList");
+  list.innerHTML = "";
+  data.forEach(item => {
+    const li = document.createElement("li");
+    li.className = "list-group-item";
+    li.textContent = `${item["Asset ID"]} - ${item["Item Description"]} - ${item["Status"]}`;
+    list.appendChild(li);
+  });
+}
+
+document.getElementById("searchBox").addEventListener("input", applyFilters);
+document.getElementById("filterStatus").addEventListener("change", applyFilters);
+document.getElementById("filterDepartment").addEventListener("change", applyFilters);
+
+function applyFilters() {
+  const keyword = document.getElementById("searchBox").value.toLowerCase();
+  const status = document.getElementById("filterStatus").value;
+  const dept = document.getElementById("filterDepartment").value;
+
+  const filtered = inventoryData.filter(item =>
+    (!keyword || Object.values(item).join(" ").toLowerCase().includes(keyword)) &&
+    (!status || item["Status"] === status) &&
+    (!dept || item["Department"] === dept)
+  );
+  displayInventory(filtered);
+}
+
+function exportCSV() {
+  let csv = "Asset ID,Item Description,Category,Serial Number,Assigned To,Department,Date Acquired,Warranty Expiry,Status,Remarks\n";
+  inventoryData.forEach(row => {
+    csv += Object.values(row).map(value => `"${value}"`).join(",") + "\n";
+  });
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "Inventory_Report.csv";
+  link.click();
+}
+
 
     function editItem(item) {
       document.getElementById("assetId").value = item["Asset ID"];
