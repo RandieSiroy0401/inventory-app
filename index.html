@@ -89,189 +89,205 @@
   </div>
 </div>
 
+<script>
+  const apiUrl = 'https://script.google.com/macros/s/AKfycbyKCDw7VM8scwKAoc9nD8v_bv-I3cQuRqnVaVJgfbpZg1fH6s3T1CEC1WZsUBza/exec';
+
+  document.getElementById("itemForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+    const isEditing = this.getAttribute("data-editing") === "true";
+
+    const data = {
+      "Asset ID": document.getElementById("assetId").value,
+      "Item Description": document.getElementById("description").value,
+      "Category": document.getElementById("category").value,
+      "Serial Number": document.getElementById("serial").value,
+      "Assigned To": document.getElementById("assignedTo").value,
+      "Department": document.getElementById("department").value,
+      "Date Acquired": document.getElementById("acquired").value,
+      "Warranty Expiry": document.getElementById("expiry").value,
+      "Status": document.getElementById("status").value,
+      "Remarks": document.getElementById("remarks").value
+    };
+
+    fetch(apiUrl, {
+      method: isEditing ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    })
+    .then(res => res.text())
+    .then(() => {
+      alert(isEditing ? "Item updated!" : "Item added!");
+      this.reset();
+      this.setAttribute("data-editing", "false");
+      loadInventory();
+    });
+  });
+
+  let statusChart, departmentChart;
+  let inventoryData = [];
+
+  function loadInventory() {
+    fetch(apiUrl)
+      .then(res => res.json())
+      .then(data => {
+        inventoryData = data;
+        displayInventory(data);
+        updateCharts(data);
+      });
+  }
+
+  function displayInventory(data) {
+    const list = document.getElementById("inventoryList");
+    list.innerHTML = "";
+
+    data.forEach(item => {
+      const li = document.createElement("li");
+      li.className = "list-group-item d-flex justify-content-between align-items-start flex-column flex-md-row";
+
+      const info = document.createElement("div");
+      info.innerHTML = `<strong>${item["Asset ID"]}</strong> - ${item["Item Description"]} - <em>${item["Status"]}</em>`;
+
+      const buttons = document.createElement("div");
+      buttons.className = "mt-2 mt-md-0";
+
+      const editBtn = document.createElement("button");
+      editBtn.className = "btn btn-sm btn-warning me-2";
+      editBtn.textContent = "Edit";
+      editBtn.onclick = () => editItem(item);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "btn btn-sm btn-danger";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.onclick = () => deleteItem(item["Asset ID"]);
+
+      buttons.appendChild(editBtn);
+      buttons.appendChild(deleteBtn);
+
+      li.appendChild(info);
+      li.appendChild(buttons);
+      list.appendChild(li);
+    });
+  }
+
+  function editItem(item) {
+    document.getElementById("assetId").value = item["Asset ID"];
+    document.getElementById("description").value = item["Item Description"];
+    document.getElementById("category").value = item["Category"];
+    document.getElementById("serial").value = item["Serial Number"];
+    document.getElementById("assignedTo").value = item["Assigned To"];
+    document.getElementById("department").value = item["Department"];
+    document.getElementById("acquired").value = item["Date Acquired"];
+    document.getElementById("expiry").value = item["Warranty Expiry"];
+    document.getElementById("status").value = item["Status"];
+    document.getElementById("remarks").value = item["Remarks"];
+    document.getElementById("itemForm").setAttribute("data-editing", "true");
+  }
+
+  function deleteItem(assetId) {
+    if (confirm("Are you sure you want to delete this item?")) {
+      fetch(apiUrl, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "Asset ID": assetId })
+      })
+      .then(res => res.text())
+      .then(() => {
+        alert("Item deleted!");
+        loadInventory();
+      });
+    }
+  }
+
+  function updateCharts(data) {
+    const statusCounts = {};
+    const departmentCounts = {};
+
+    data.forEach(item => {
+      const status = item["Status"];
+      const dept = item["Department"];
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+      departmentCounts[dept] = (departmentCounts[dept] || 0) + 1;
+    });
+
+    const statusLabels = Object.keys(statusCounts);
+    const statusData = Object.values(statusCounts);
+
+    const departmentLabels = Object.keys(departmentCounts);
+    const departmentData = Object.values(departmentCounts);
+
+    if (statusChart) statusChart.destroy();
+    statusChart = new Chart(document.getElementById("statusChart"), {
+      type: "bar",
+      data: {
+        labels: statusLabels,
+        datasets: [{
+          label: "Items by Status",
+          data: statusData,
+          backgroundColor: "#0d6efd"
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+
+    if (departmentChart) departmentChart.destroy();
+    departmentChart = new Chart(document.getElementById("departmentChart"), {
+      type: "pie",
+      data: {
+        labels: departmentLabels,
+        datasets: [{
+          label: "Items by Department",
+          data: departmentData,
+          backgroundColor: ["#0d6efd", "#198754", "#dc3545", "#ffc107", "#6f42c1"]
+        }]
+      },
+      options: {
+        responsive: true
+      }
+    });
+  }
+
+  function applyFilters() {
+    const keyword = document.getElementById("searchBox").value.toLowerCase();
+    const status = document.getElementById("filterStatus").value;
+    const dept = document.getElementById("filterDepartment").value;
+
+    const filtered = inventoryData.filter(item =>
+      (!keyword || Object.values(item).join(" ").toLowerCase().includes(keyword)) &&
+      (!status || item["Status"] === status) &&
+      (!dept || item["Department"] === dept)
+    );
+    displayInventory(filtered);
+  }
+
+  function exportCSV() {
+    let csv = "Asset ID,Item Description,Category,Serial Number,Assigned To,Department,Date Acquired,Warranty Expiry,Status,Remarks\n";
+    inventoryData.forEach(row => {
+      csv += Object.values(row).map(value => `"${value}"`).join(",") + "\n";
+    });
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "Inventory_Report.csv";
+    link.click();
+  }
+
+  document.getElementById("searchBox").addEventListener("input", applyFilters);
+  document.getElementById("filterStatus").addEventListener("change", applyFilters);
+  document.getElementById("filterDepartment").addEventListener("change", applyFilters);
+
+  loadInventory();
+</script>
 
 
 
   
-  <script>
-    const apiUrl = 'https://script.google.com/macros/s/AKfycbyKCDw7VM8scwKAoc9nD8v_bv-I3cQuRqnVaVJgfbpZg1fH6s3T1CEC1WZsUBza/exec'; // Replace with your Apps Script Web App URL
 
-    document.getElementById("itemForm").addEventListener("submit", function(e) {
-      e.preventDefault();
-      const isEditing = this.getAttribute("data-editing") === "true";
-
-      const data = {
-        "Asset ID": document.getElementById("assetId").value,
-        "Item Description": document.getElementById("description").value,
-        "Category": document.getElementById("category").value,
-        "Serial Number": document.getElementById("serial").value,
-        "Assigned To": document.getElementById("assignedTo").value,
-        "Department": document.getElementById("department").value,
-        "Date Acquired": document.getElementById("acquired").value,
-        "Warranty Expiry": document.getElementById("expiry").value,
-        "Status": document.getElementById("status").value,
-        "Remarks": document.getElementById("remarks").value
-      };
-
-      fetch(apiUrl, {
-        method: isEditing ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      })
-      .then(res => res.text())
-      .then(() => {
-        alert(isEditing ? "Item updated!" : "Item added!");
-        this.reset();
-        this.setAttribute("data-editing", "false");
-        loadInventory();
-      });
-    });
-
-let statusChart, departmentChart;
-
-function updateCharts(data) {
-  const statusCounts = {};
-  const departmentCounts = {};
-
-  data.forEach(item => {
-    const status = item["Status"];
-    const dept = item["Department"];
-    statusCounts[status] = (statusCounts[status] || 0) + 1;
-    departmentCounts[dept] = (departmentCounts[dept] || 0) + 1;
-  });
-
-  const statusLabels = Object.keys(statusCounts);
-  const statusData = Object.values(statusCounts);
-
-  const departmentLabels = Object.keys(departmentCounts);
-  const departmentData = Object.values(departmentCounts);
-
-  // Status Chart
-  if (statusChart) statusChart.destroy();
-  statusChart = new Chart(document.getElementById("statusChart"), {
-    type: "bar",
-    data: {
-      labels: statusLabels,
-      datasets: [{
-        label: "Items by Status",
-        data: statusData,
-        backgroundColor: "#0d6efd"
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false }
-      }
-    }
-  });
-
-  // Department Chart
-  if (departmentChart) departmentChart.destroy();
-  departmentChart = new Chart(document.getElementById("departmentChart"), {
-    type: "pie",
-    data: {
-      labels: departmentLabels,
-      datasets: [{
-        label: "Items by Department",
-        data: departmentData,
-        backgroundColor: ["#0d6efd", "#198754", "#dc3545", "#ffc107", "#6f42c1"]
-      }]
-    },
-    options: {
-      responsive: true
-    }
-  });
-}
-
-
-
-    
-let inventoryData = [];
-
-function loadInventory() {
-  fetch(apiUrl)
-    .then(res => res.json())
-    .then(data => {
-      inventoryData = data;
-      displayInventory(data);
-      updateCharts(data);
-    });
-}
-
-function displayInventory(data) {
-  const list = document.getElementById("inventoryList");
-  list.innerHTML = "";
-  data.forEach(item => {
-    const li = document.createElement("li");
-    li.className = "list-group-item";
-    li.textContent = `${item["Asset ID"]} - ${item["Item Description"]} - ${item["Status"]}`;
-    list.appendChild(li);
-  });
-}
-
-document.getElementById("searchBox").addEventListener("input", applyFilters);
-document.getElementById("filterStatus").addEventListener("change", applyFilters);
-document.getElementById("filterDepartment").addEventListener("change", applyFilters);
-
-function applyFilters() {
-  const keyword = document.getElementById("searchBox").value.toLowerCase();
-  const status = document.getElementById("filterStatus").value;
-  const dept = document.getElementById("filterDepartment").value;
-
-  const filtered = inventoryData.filter(item =>
-    (!keyword || Object.values(item).join(" ").toLowerCase().includes(keyword)) &&
-    (!status || item["Status"] === status) &&
-    (!dept || item["Department"] === dept)
-  );
-  displayInventory(filtered);
-}
-
-function exportCSV() {
-  let csv = "Asset ID,Item Description,Category,Serial Number,Assigned To,Department,Date Acquired,Warranty Expiry,Status,Remarks\n";
-  inventoryData.forEach(row => {
-    csv += Object.values(row).map(value => `"${value}"`).join(",") + "\n";
-  });
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "Inventory_Report.csv";
-  link.click();
-}
-
-
-    function editItem(item) {
-      document.getElementById("assetId").value = item["Asset ID"];
-      document.getElementById("description").value = item["Item Description"];
-      document.getElementById("category").value = item["Category"];
-      document.getElementById("serial").value = item["Serial Number"];
-      document.getElementById("assignedTo").value = item["Assigned To"];
-      document.getElementById("department").value = item["Department"];
-      document.getElementById("acquired").value = item["Date Acquired"];
-      document.getElementById("expiry").value = item["Warranty Expiry"];
-      document.getElementById("status").value = item["Status"];
-      document.getElementById("remarks").value = item["Remarks"];
-      document.getElementById("itemForm").setAttribute("data-editing", "true");
-    }
-
-    function deleteItem(assetId) {
-      if (confirm("Are you sure you want to delete this item?")) {
-        fetch(apiUrl, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ "Asset ID": assetId })
-        })
-        .then(res => res.text())
-        .then(() => {
-          alert("Item deleted!");
-          loadInventory();
-        });
-      }
-    }
-
-    loadInventory();
-  </script>
 </body>
 </html>
 
