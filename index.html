@@ -184,19 +184,19 @@
   }
 
   function deleteItem(assetId) {
-    if (confirm("Are you sure you want to delete this item?")) {
-      fetch(apiUrl, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ "Asset ID": assetId })
-      })
-      .then(res => res.text())
-      .then(() => {
-        alert("Item deleted!");
-        loadInventory();
-      });
-    }
+  if (confirm("Are you sure you want to delete this item?")) {
+    fetch(apiUrl + "?method=DELETE", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ "Asset ID": assetId, "method": "DELETE" })
+    })
+    .then(res => res.text())
+    .then(() => {
+      alert("Item deleted!");
+      loadInventory();
+    });
   }
+}
 
   function updateCharts(data) {
     const statusCounts = {};
